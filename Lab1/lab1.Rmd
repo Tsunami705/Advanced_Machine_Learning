@@ -1,0 +1,123 @@
+---
+title: "Lab_1"
+author: "Shipeng Liu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(bnlearn)
+library(gRain)
+```
+
+
+# (1) Show that multiple runs of the hill-climbing algorithm can return non-equivalent Bayesian network (BN) structures. Explain why this happens. Use the Asia dataset which is included in the bnlearn package. To load the data, run data("asia"). Recall from the lectures that the concept of non-equivalent BN structures has a precise meaning.
+
+```{r}
+set.seed(12345)
+
+showDifference=function(g1,g2){
+  cat("  Is two graph equivalent?",all.equal(cpdag(g1),cpdag(g2)))
+  graphviz.compare(g1,g2)
+  print(cpdag(g1))
+  print(cpdag(g2))
+}
+
+data("asia")
+
+
+# Different initial graph
+dag_1=hc(asia)
+init_dag=random.graph(names(asia),num=1,method = "ordered")
+dag_2=hc(asia,start = init_dag)
+
+showDifference(dag_1,dag_2)
+
+```
+
+
+```{r}
+# Different iss
+dag_3=hc(asia,score='bde',iss=1)
+dag_4=hc(asia,score='bde',iss=2)
+
+showDifference(dag_3,dag_4)
+```
+
+Given different initial graphs, or different iss using BDeu score, the learnt graphs are not equivalent(Have different adjacencies and unshielded colliders). It's because we choose diffierent initial hyperparameters and Hill-Climbing only promise to find the local minimum.
+
+In the second instance,iss(imaginary sample size) is related to the prior $p(\theta_{x_i|Pa_i=j}|G)$, the latter follows Dirichlet distribution.As we know, the prior distribution will influence the posterior distribution.
+
+
+# (2) Learn a BN from 80 % of the Asia dataset. The dataset is included in the bnlearn package. To load the data, run data("asia"). Learn both the structure and the parameters. Use any learning algorithm and settings that you consider appropriate. Use the BN learned to classify the remaining 20 % of the Asia dataset in two classes: S = yes and S = no. In other words, compute the posterior probability distribution of S for each case and classify it in the most likely class. To do so, you have to use exact or approximate inference with the help of the bnlearn and gRain packages, i.e. you are not allowed to use functions such as predict. Report the confusion matrix, i.e. true/false positives/negatives.
+
+```{r}
+asiaSample=sample(nrow(asia),floor(nrow(asia)*0.8))
+trainSet=asia[asiaSample,]
+testSet=asia[-asiaSample,]
+trueDag = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
+dag=hc(trainSet,score='bde',iss=2)
+
+graphviz.compare(dag,trueDag)
+
+```
+
+## compute the posterior probability distribution of S for each case and classify it in the most likely class
+
+```{r,warning=FALSE}
+bnInference=function(dag,trainSet,testSet,target){
+  fittedDag=bn.fit(dag,trainSet)
+  grainDag=as.grain(fittedDag)
+  compiledDag=compile(grainDag)
+  
+  requiredNodes=setdiff(colnames(asia),target)
+  
+  predict=function(testInstence){
+    evidence=setEvidence(compiledDag,nodes=requiredNodes,states=testInstence)
+    return(ifelse(querygrain(evidence,nodes=target)[[1]][[1]]>0.5,"no","yes"))
+  }
+
+  res=sapply(as.data.frame(t(testSet[,requiredNodes])),predict)
+  
+  return(res)
+}
+
+# Fit the true dag
+trueRes=bnInference(trueDag,trainSet,testSet,"S")
+trueRes <- factor(trueRes, levels = c("yes", "no"))
+
+# Fit the learnt dag
+learntRes=bnInference(dag,trainSet,testSet,"S")
+learntRes <- factor(learntRes, levels = c("yes", "no"))
+```
+
+## Confusion Matrix
+
+### True Graph
+
+```{r}
+# Confusion matrix 
+trueDagMatrix <- table(testSet$S, trueRes)
+print(trueDagMatrix[,c(2,1)])
+
+```
+
+### Own Result
+
+```{r}
+# Confusion matrix 
+dagMatrix <- table(testSet$S, learntRes)
+print(dagMatrix[,c(2,1)])
+
+```
+
+We have the same result! Maybe it's because two graphs are almost equivalent, and $p(A=no)\approx0.99$, this node has small influence on posterior distribution of S.
+
+
+
+
+
+
+
+
+
