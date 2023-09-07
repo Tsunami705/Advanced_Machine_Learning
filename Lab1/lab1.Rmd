@@ -2,7 +2,7 @@
 title: "Lab_1"
 author: "Shipeng Liu"
 date: "`r Sys.Date()`"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -65,12 +65,16 @@ graphviz.compare(dag,trueDag)
 ## compute the posterior probability distribution of S for each case and classify it in the most likely class
 
 ```{r,warning=FALSE}
-bnInference=function(dag,trainSet,testSet,target){
+bnInference=function(dag,trainSet,testSet,target,mb=0){
   fittedDag=bn.fit(dag,trainSet)
   grainDag=as.grain(fittedDag)
   compiledDag=compile(grainDag)
   
-  requiredNodes=setdiff(colnames(asia),target)
+  if(mb==0){
+    requiredNodes=setdiff(colnames(asia),target)
+  }else{
+    requiredNodes=mb(fittedDag,target)
+  }
   
   predict=function(testInstence){
     evidence=setEvidence(compiledDag,nodes=requiredNodes,states=testInstence)
@@ -81,6 +85,7 @@ bnInference=function(dag,trainSet,testSet,target){
   
   return(res)
 }
+
 
 # Fit the true dag
 trueRes=bnInference(trueDag,trainSet,testSet,"S")
@@ -111,11 +116,100 @@ print(dagMatrix[,c(2,1)])
 
 ```
 
-We have the same result! Maybe it's because two graphs are almost equivalent, and $p(A=no)\approx0.99$, this node has small influence on posterior distribution of S.
+We have the same result!
 
 
+# (3) In the previous exercise, you classiﬁed the variable S given observations for all the rest of the variables. Now, you are asked to classify S given observations only for the so-called Markov blanket of S, i.e. its parents plus its children plus the parents of its children minus S itself. Report again the confusion matrix.
+
+```{r warning= FALSE}
+mbLearntRes=bnInference(dag,trainSet,testSet,"S",mb=1)
+mbLearntRes <- factor(mbLearntRes, levels = c("yes", "no"))
+mbDagMatrix <- table(testSet$S, mbLearntRes)
+print(mbDagMatrix[,c(2,1)])
+
+```
+
+The confusion matrix is the same as we get in (2), which tells that the markov blanket of S(node L and B) gives all the causal information of S.
 
 
+# (4) Repeat the exercise (2) using a naive Bayes classiﬁer, i.e. the predictive variables are independent given the class variable. See p. 380 in Bishop’s book or Wikipedia for more information on the naive Bayes classiﬁer. Model the naive Bayes classiﬁer as a BN. You have to create the BN by hand.
+
+```{r}
+naiveBN = model2network("[S][A|S][T|S][L|S][B|S][E|S][X|S][D|S]")
+plot(naiveBN)
+```
+
+## Confusion Matrix
+
+```{r warning=FALSE}
+# Fit the naive bayes dag
+nbRes=bnInference(naiveBN,trainSet,testSet,"S")
+nbRes <- factor(nbRes, levels = c("yes", "no"))
+
+# Confusion matrix 
+nbMatrix <- table(testSet$S, nbRes)
+print(nbMatrix[,c(2,1)])
+```
+
+
+# (5) Explain why you obtain the same or different results in the exercises (2-4)
+
+## Why the same result in exercise (2)?
+
+In the true graph, the variables A and T are not independent.
+
+### For the DAG we learned in score based approach
+
+```{r}
+plot(dag)
+```
+
+$$\begin{aligned}
+    P(S|X\setminus S)&= \frac{P(X)}{P(X\setminus S)} \\
+    &= \frac{\prod_{X}P(X_i|Pa_i)}{\prod_{X\setminus S}P(X_i|Pa_i)} \\
+    &= \frac{P(A)P(T)P(S)P(L|S)P(B|S)P(E|T,L)P(D|B,E)P(X|E)}{\tau_1(L)\tau_2(B)P(A)P(T)P(E|T,L)P(X|E)P(D|E,B)} \\
+    &= \frac{P(S)P(L|S)P(B|S)}{\tau_1(L)\tau_2(B)}
+\end{aligned}$$
+
+where $X$ is the set of all the variable in the directed acyclic graph.
+
+### For the true DAG
+
+```{r}
+plot(trueDag)
+```
+
+$$\begin{aligned}
+    P(S|X\setminus S)&= \frac{P(X)}{P(X\setminus S)} \\
+    &= \frac{\prod_{X}P(X_i|Pa_i)}{\prod_{X\setminus S}P(X_i|Pa_i)} \\
+    &= \frac{P(A)P(T|A)P(S)P(L|S)P(B|S)P(E|T,L)P(D|B,E)P(X|E)}{\tau_1(L)\tau_2(B)P(A)P(T|A)P(E|T,L)P(X|E)P(D|E,B)} \\
+    &= \frac{P(S)P(L|S)P(B|S)}{\tau_1(L)\tau_2(B)}
+\end{aligned}$$
+
+From the induction formula,the distribution of $S$ given $Y\setminus S$ only relate to the variables $B$,$L$ and $S$,Which is also the reason we get the same result in exercise 3.
+
+## Why the same result in exercise (3)?
+
+$$\begin{aligned}
+    P(S|U\setminus S)&= \frac{P(U)}{P(U\setminus S)} \\
+    &= \frac{P(S)P(L|S)P(B|S)}{\tau_1(L)\tau_2(B)} \\
+\end{aligned}$$
+
+Where $U$ is a subset of set $X$,and $U=\lbrace S,B,T\rbrace$.
+
+## Why different result in exercise (4)?
+
+### In exercise 4 we use Naive Bayesan model to classify.
+
+```{r}
+plot(naiveBN)
+```
+
+$$\begin{aligned}
+    P(S|X\setminus S)&= \frac{P(X)}{P(X\setminus S)} \\
+    &= \frac{\prod_{X}P(X_i|Pa_i)}{\prod_{X\setminus S}P(X_i|Pa_i)} \\
+    &= \frac{P(S)P(A|S)P(T|S)P(L|S)P(B|S)P(E|S)P(D|S)P(X|S)}{\tau_1(A,P,L,B,E,D,X)}
+\end{aligned}$$
 
 
 
