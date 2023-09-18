@@ -1,0 +1,291 @@
+---
+title: "lab2"
+author: "Shipeng Liu"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(HMM)
+library(ggplot2)
+library(entropy)
+```
+
+# Questions 
+
+The purpose of the lab is to put in practice some of the concepts covered in the lectures. To do so, you are asked to model the behavior of a robot that walks around a ring. The ring is divided into 10 sectors. At any given time point, the robot is in one of the sectors and decides with equal probability to stay in that sector or move to the next sector. You do not have direct observation of the robot. However, the robot is equipped with a tracking device that you can access. The device is not very accurate though: If the robot is in the sector i, then the device will report that the robot is in the sectors [i - 2,i + 2] with equal probability.
+
+## (1) Build a hidden Markov model (HMM) for the scenario described above.
+
+```{r}
+states=c("1","2","3","4","5","6","7","8","9","10")
+symbols=c("1","2","3","4","5","6","7","8","9","10")
+startProbs=rep(0.1,10)
+
+# State Transition Matrix
+transProbs=matrix(0,nrow=length(states),ncol=length(states))
+for(i in 1:9){
+  transProbs[i,i]=0.5
+  transProbs[i,i+1]=0.5
+}
+transProbs[10,10]=0.5
+transProbs[10,1]=0.5
+
+# Emission Transition Matrix
+emissionProbs=matrix(c(0.2,0.2,0.2,0,0,0,0,0,0.2,0.2,
+                       0.2,0.2,0.2,0.2,0,0,0,0,0,0.2,
+                       0.2,0.2,0.2,0.2,0.2,0,0,0,0,0,
+                       0,0.2,0.2,0.2,0.2,0.2,0,0,0,0,
+                       0,0,0.2,0.2,0.2,0.2,0.2,0,0,0,
+                       0,0,0,0.2,0.2,0.2,0.2,0.2,0,0,
+                       0,0,0,0,0.2,0.2,0.2,0.2,0.2,0,
+                       0,0,0,0,0,0.2,0.2,0.2,0.2,0.2,
+                       0.2,0,0,0,0,0,0.2,0.2,0.2,0.2,
+                       0.2,0.2,0,0,0,0,0,0.2,0.2,0.2),nrow=length(states),ncol=length(symbols),byrow=TRUE)
+
+# HMM model
+hmm=initHMM(States = states,Symbols = symbols,startProbs = startProbs,transProbs = transProbs,emissionProbs = emissionProbs)
+```
+
+## (2) Simulate the HMM for 100 time steps
+```{r}
+simulate=simHMM(hmm,100)
+
+cat("The distribution of the hidden states:\n",simulate$states)
+
+cat("\n\nThe distribution of the observations:\n",simulate$observation)
+
+```
+
+## (3) Discard the hidden states from the sample obtained above. Use the remaining observations to compute the ﬁltered and smoothed probability distributions for each of the 100 time points. Compute also the most probable path.
+```{r}
+observations=simulate$observation
+
+# forward
+alpha=exp(forward(hmm,observations))
+
+# backward
+beta=exp(backward(hmm,observations))
+
+# smoothing 
+smoother=matrix(0,nrow=nrow(alpha),ncol=ncol(alpha))
+for(i in 1:100){
+  smoother[,i]=(alpha[,i]*beta[,i])/sum(alpha[,i]*beta[,i])
+}
+
+# filtering
+filter=matrix(0,nrow=nrow(alpha),ncol=ncol(alpha))
+for(i in 1:100){
+  filter[,i]=alpha[,i]/sum(alpha[,i])
+}
+
+# the most probable path
+mostProbablePath=viterbi(hmm,observations)
+
+```
+
+### Filtered probability distribution
+
+```{r}
+print(filter)
+```
+
+### Smoothed probability distribution
+
+```{r}
+print(smoother)
+```
+
+### The most probable states path
+
+```{r}
+print(mostProbablePath)
+```
+
+## (4) Compute the accuracy of the ﬁltered and smoothed probability distributions, and of the most probable path. That is, compute the percentage of the true hidden states that are guessed by each method.
+
+### The accuracy of the ﬁltered probability distribution
+
+```{r}
+trueStates=factor(simulate$states)
+# Filter accuracy
+filterPredict=rep(0,100)
+for(i in 1:100){
+  filterPredict[i]=which.max(filter[,i])
+}
+filterPredict <- factor(filterPredict)
+
+cat("The accuracy of the ﬁltered probability distribution is :",mean(filterPredict==trueStates))
+```
+
+### The accuracy of the smoothed probability distribution
+
+```{r}
+# Smoother accuracy
+SmootherPredict=rep(0,100)
+for(i in 1:100){
+  SmootherPredict[i]=which.max(smoother[,i])
+}
+SmootherPredict <- factor(SmootherPredict)
+
+cat("The accuracy of the smoothed probability distribution is :",mean(SmootherPredict==trueStates))
+```
+
+### The accuracy of the most probable path
+
+```{r}
+mostProbablePath <- factor(mostProbablePath)
+
+cat("The accuracy of the most probable path is :",mean(mostProbablePath==trueStates))
+
+```
+
+## (5) Repeat the previous exercise with different simulated samples. In general, the smoothed distributions should be more accurate than the ﬁltered distributions. Why ? In general, the smoothed distributions should be more accurate than the most probable paths, too. Why ?
+
+```{r}
+simulate_and_predict=function(hmm,steps){
+  simulate_2=simHMM(hmm,steps)
+  
+  observations_2=simulate_2$observation
+  
+  alpha_2=exp(forward(hmm,observations_2))
+  beta_2=exp(backward(hmm,observations_2))
+  
+  # smoothing 
+  smoother_2=matrix(0,nrow=nrow(alpha_2),ncol=ncol(alpha_2))
+  for(i in 1:steps){
+    smoother_2[,i]=(alpha_2[,i]*beta_2[,i])/sum(alpha_2[,i]*beta_2[,i])
+  }
+  
+  # filtering
+  filter_2=matrix(0,nrow=nrow(alpha_2),ncol=ncol(alpha_2))
+  for(i in 1:steps){
+    filter_2[,i]=alpha_2[,i]/sum(alpha_2[,i])
+  }
+  
+  # the most probable path
+  mostProbablePath_2=viterbi(hmm,observations_2)
+  
+  trueStates_2=factor(simulate_2$states)
+  
+  # Filter accuracy
+  filterPredict_2=rep(0,steps)
+  for(i in 1:steps){
+    filterPredict_2[i]=which.max(filter_2[,i])
+  }
+  filterPredict_2 <- factor(filterPredict_2)
+  
+  # Smoother accuracy
+  SmootherPredict_2=rep(0,steps)
+  for(i in 1:steps){
+    SmootherPredict_2[i]=which.max(smoother_2[,i])
+  }
+  SmootherPredict_2 <- factor(SmootherPredict_2)
+  
+  # viterbi accuracy
+  mostProbablePath_2 <- factor(mostProbablePath_2)
+  
+  return(c(mean(filterPredict_2==trueStates_2),mean(SmootherPredict_2==trueStates_2),mean(mostProbablePath_2==trueStates_2)))
+  }
+
+
+#Plot
+
+accuracyPlot=function(hmm,steps){
+  accuracy_df=data.frame(
+    filter = rep(0, 50),
+    smoother = rep(0, 50),
+    viterbi = rep(0, 50)
+  )
+  
+  for(i in 1:50){
+    accuracy_df[i,]=simulate_and_predict(hmm,steps)
+  }
+  
+  # Plot
+  ggplot(data = accuracy_df) +
+    geom_line(aes(x = 1:50, y = filter, color = "filter"), size = 1) +
+    geom_line(aes(x = 1:50, y = smoother, color = "smoother"), size = 1) +
+    geom_line(aes(x = 1:50, y = viterbi, color = "viterbi"), size = 1) +
+    labs(color = "Legend") +
+    scale_color_manual(values = c("filter" = "red", "smoother" = "pink", "viterbi" = "orange")) +
+    xlab("Sample") +
+    ylab("Accuracy") +
+    ggtitle(paste("The accuracy of different methods with ",steps," steps"))
+}
+
+
+accuracyPlot(hmm,50)
+accuracyPlot(hmm,100)
+accuracyPlot(hmm,150)
+
+
+```
+
+From the chart,the more step,the better the accuracy of smoothing compare to filtering and viterbi algorithm,and the accuracy of smoother is always the best, meanwhile, the accuracy of filter and viterbi algorithm fluctuate. It's difficult to find out which is better among them.
+
+Filtering: $$p(Z^t|X^{0:t})=\frac{\alpha(Z^t)}{\sum_{Z^t}\alpha(Z^t)}$$
+
+Smoothing: $$p(Z^t|X^{0:T})=\frac{\alpha(Z^t)\beta(Z^t)}{\sum_{Z^t}\alpha(Z^t)\beta(Z^t)}$$
+
+From the formula,the smoothing refer to more information (the whole process' observations) to update the posterior distribution, while the filtering and viterbi algorithm have less information. The filtering only refer to previous observations to update the posterior distribution.
+
+Note that Forward-Backward gives marginal probability for each individual state, Viterbi gives probability of the most likely sequence of states. The Viterbi algorithm may not choose the state of the best marginal probability.
+
+
+## (6) Is it always true that the later in time (i.e., the more observations you have received) the better you know where the robot is ?
+
+```{r}
+entropy_cal=function(steps,hmm){
+  sample_3=simHMM(hmm,steps)
+  observations_3=sample_3$observation
+  alpha_3=exp(forward(hmm,observations_3))
+
+  filter_3=prop.table(alpha_3,2)
+  entropy_3=entropy.empirical(filter_3[,steps])
+  return(entropy_3)
+}
+
+entropy_df=data.frame(entropy=sapply(seq(50,200,5),entropy_cal,hmm=hmm))
+
+# Plot
+ggplot(data = entropy_df) +
+  geom_line(aes(x = seq(50,200,5), y = entropy), size = 1) +
+  xlab("Step") +
+  ylab("Shannon entropy") +
+  ggtitle(paste("The Shannon entropy with different steps"))
+
+```
+
+Shannon entropy is used to measure the uncertainty or information content of random variables. When the entropy is high, it means that the value of the random variable has high uncertainty and the amount of information is large; when the entropy is low, it means that the value of the random variable has low uncertainty and the amount of information Also smaller. From the chart, the Shannon entropy does not tend to decrease as the number of steps increases, which means that we cannot know the robot's location more clearly.
+
+
+## (7) Consider any of the samples above of length 100. Compute the probabilities of the hidden states for the time step 101.
+
+$$\begin{aligned}
+    p(Z^{101}|X^{0:100})&=  \sum_{Z^{100}}p(Z^{101},Z^{100}|X^{0:100})\\
+    &= \sum_{Z^{100}}p(Z^{101}|X^{0:100},Z^{100})p(Z^{100}|X^{0:100}) \\
+    &= \sum_{Z^{100}}p(Z^{101}|Z^{100})p(Z^{100}|X^{0:100}) \\
+\end{aligned}$$
+
+We already have $p(Z^{100}|X^{0:100})$ in filtering.
+
+```{r}
+filter[,100]
+```
+
+Hence we can compute the probabilities of the hidden states for the time step 101 $p(Z^{101}|X^{0:100})$
+
+```{r}
+t(transProbs)%*%filter[,100]
+```
+
+
+
+
+
+
+
+
+
+

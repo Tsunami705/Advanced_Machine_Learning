@@ -160,28 +160,20 @@ In the true graph, the variables A and T are not independent.
 
 ### For the DAG we learned in score based approach
 
-```{r}
-plot(dag)
-```
-
 $$\begin{aligned}
-    P(S|X\setminus S)&= \frac{P(X)}{P(X\setminus S)} \\
-    &= \frac{\prod_{X}P(X_i|Pa_i)}{\prod_{X\setminus S}P(X_i|Pa_i)} \\
+    P(S|Y\setminus S)&= \frac{P(Y)}{P(Y\setminus S)} \\
+    &= \frac{\prod_{Y}P(X_i|Pa_i)}{\sum_S\prod_{Y\setminus S}P(X_i|Pa_i)} \\
     &= \frac{P(A)P(T)P(S)P(L|S)P(B|S)P(E|T,L)P(D|B,E)P(X|E)}{\tau_1(L)\tau_2(B)P(A)P(T)P(E|T,L)P(X|E)P(D|E,B)} \\
     &= \frac{P(S)P(L|S)P(B|S)}{\tau_1(L)\tau_2(B)}
 \end{aligned}$$
 
-where $X$ is the set of all the variable in the directed acyclic graph.
+where $Y$ is the set of all the variable in the directed acyclic graph, $\tau_1$,$\tau_2$ is the marginal distribution of L,B, we get them using Variable Elimination.
 
 ### For the true DAG
 
-```{r}
-plot(trueDag)
-```
-
 $$\begin{aligned}
-    P(S|X\setminus S)&= \frac{P(X)}{P(X\setminus S)} \\
-    &= \frac{\prod_{X}P(X_i|Pa_i)}{\prod_{X\setminus S}P(X_i|Pa_i)} \\
+    P(S|Y\setminus S)&= \frac{P(Y)}{P(Y\setminus S)} \\
+    &= \frac{\prod_{Y}P(X_i|Pa_i)}{\sum_S\prod_{Y\setminus S}P(X_i|Pa_i)} \\
     &= \frac{P(A)P(T|A)P(S)P(L|S)P(B|S)P(E|T,L)P(D|B,E)P(X|E)}{\tau_1(L)\tau_2(B)P(A)P(T|A)P(E|T,L)P(X|E)P(D|E,B)} \\
     &= \frac{P(S)P(L|S)P(B|S)}{\tau_1(L)\tau_2(B)}
 \end{aligned}$$
@@ -195,22 +187,17 @@ $$\begin{aligned}
     &= \frac{P(S)P(L|S)P(B|S)}{\tau_1(L)\tau_2(B)} \\
 \end{aligned}$$
 
-Where $U$ is a subset of set $X$,and $U=\lbrace S,B,T\rbrace$.
+Where $U$ is a subset of set $X$,and $U=\lbrace S,L,B\rbrace$ i.e.S and its markov blanket.
 
 ## Why different result in exercise (4)?
 
 ### In exercise 4 we use Naive Bayesan model to classify.
 
-```{r}
-plot(naiveBN)
-```
-
 $$\begin{aligned}
-    P(S|X\setminus S)&= \frac{P(X)}{P(X\setminus S)} \\
-    &= \frac{\prod_{X}P(X_i|Pa_i)}{\prod_{X\setminus S}P(X_i|Pa_i)} \\
+    P(S|Y\setminus S)&= \frac{P(Y)}{P(Y\setminus S)} \\
+    &= \frac{\prod_{Y}P(X_i|Pa_i)}{\sum_S\prod_{Y\setminus S}P(X_i|Pa_i)} \\
     &= \frac{P(S)P(A|S)P(T|S)P(L|S)P(B|S)P(E|S)P(D|S)P(X|S)}{\tau_1(A,P,L,B,E,D,X)}
 \end{aligned}$$
-
 
 
 
